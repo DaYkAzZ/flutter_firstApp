@@ -3,6 +3,11 @@ import 'screens/films_screen.dart';
 import 'screens/planet_screen.dart';
 import 'screens/characters_screen.dart';
 
+const arcadeBgDark = Color(0xFF070311);
+const arcadeBgMid = Color(0xFF130A2B);
+const arcadeNeonCyan = Color(0xFF00F5FF);
+const arcadeNeonPink = Color(0xFFFF2FAE);
+
 void main() {
   runApp(const MyApp());
 }
@@ -16,16 +21,27 @@ class MyApp extends StatelessWidget {
       title: 'Star Wars',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF020B18),
+        scaffoldBackgroundColor: arcadeBgDark,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: arcadeNeonCyan,
+          brightness: Brightness.dark,
+        ).copyWith(primary: arcadeNeonCyan, secondary: arcadeNeonPink),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.black,
+            backgroundColor: arcadeNeonPink,
+            textStyle: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          foregroundColor: Color(0xFFFFE81F),
+          foregroundColor: arcadeNeonCyan,
           titleTextStyle: TextStyle(
-            color: Color(0xFFFFE81F),
+            color: arcadeNeonCyan,
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            letterSpacing: 2,
+            letterSpacing: 3.2,
           ),
         ),
       ),
@@ -59,40 +75,57 @@ class _MainPageState extends State<MainPage> {
           Container(
             decoration: const BoxDecoration(
               gradient: RadialGradient(
-                center: Alignment.topLeft,
-                radius: 2.0,
-                colors: [Color(0xFF0D1B3E), Color(0xFF020B18)],
+                center: Alignment.topCenter,
+                radius: 1.65,
+                colors: [Color(0xFF271157), Color(0xFF120825), arcadeBgDark],
               ),
             ),
           ),
           // Étoiles
           const StarfieldBackground(),
+          const ScanlineOverlay(),
+          IgnorePointer(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    arcadeNeonPink.withOpacity(0.08),
+                    Colors.transparent,
+                    arcadeNeonCyan.withOpacity(0.08),
+                  ],
+                ),
+              ),
+            ),
+          ),
           // Contenu
           _screens[_selectedIndex],
         ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF020B18),
-          border: const Border(
-            top: BorderSide(color: Color(0xFFFFE81F), width: 1),
+          color: arcadeBgDark.withOpacity(0.95),
+          border: Border(
+            top: BorderSide(color: arcadeNeonPink.withOpacity(0.8), width: 1.1),
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFFFE81F).withOpacity(0.15),
-              blurRadius: 12,
-              spreadRadius: 2,
+              color: arcadeNeonPink.withOpacity(0.2),
+              blurRadius: 14,
+              spreadRadius: 1.5,
             ),
+            BoxShadow(color: arcadeNeonCyan.withOpacity(0.16), blurRadius: 22),
           ],
         ),
         child: BottomNavigationBar(
           currentIndex: _selectedIndex,
           backgroundColor: Colors.transparent,
-          selectedItemColor: const Color(0xFFFFE81F),
+          selectedItemColor: arcadeNeonCyan,
           unselectedItemColor: Colors.white38,
           selectedLabelStyle: const TextStyle(
             fontWeight: FontWeight.bold,
-            letterSpacing: 1,
+            letterSpacing: 1.4,
           ),
           elevation: 0,
           onTap: (index) => setState(() => _selectedIndex = index),
@@ -208,11 +241,40 @@ class StarPainter extends CustomPainter {
           : (i % 5 == 1)
           ? 0.6
           : 0.4;
+      final flickerColor = (i % 4 == 0)
+          ? arcadeNeonCyan.withOpacity(opacity)
+          : (i % 4 == 1)
+          ? arcadeNeonPink.withOpacity(opacity * 0.85)
+          : Colors.white.withOpacity(opacity);
       canvas.drawCircle(
         Offset(star.dx * size.width, star.dy * size.height),
         radius,
-        paint..color = Colors.white.withOpacity(opacity),
+        paint..color = flickerColor,
       );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class ScanlineOverlay extends StatelessWidget {
+  const ScanlineOverlay({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: CustomPaint(painter: ScanlinePainter(), size: Size.infinite),
+    );
+  }
+}
+
+class ScanlinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final linePaint = Paint()..color = Colors.white.withOpacity(0.03);
+    for (double y = 0; y < size.height; y += 4) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
     }
   }
 

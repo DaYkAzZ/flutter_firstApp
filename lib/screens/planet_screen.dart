@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+const arcadeBgDark = Color(0xFF070311);
+const arcadeNeonCyan = Color(0xFF00F5FF);
+const arcadeNeonPink = Color(0xFFFF2FAE);
+
 class PlanetScreen extends StatefulWidget {
   const PlanetScreen({super.key});
 
@@ -13,6 +17,8 @@ class _PlanetScreenState extends State<PlanetScreen> {
   List<dynamic> planets = [];
   bool isLoading = true;
   String? errorMessage;
+  String searchQuery = '';
+  bool showGrid = true;
 
   // Images NASA domaine public pour représenter les planètes
   final List<String> planetImages = [
@@ -48,6 +54,10 @@ class _PlanetScreenState extends State<PlanetScreen> {
   }
 
   Future<void> fetchPlanets() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
     try {
       final response = await http.get(
         Uri.parse('https://swapi.tech/api/planets?page=1&limit=10'),
@@ -61,12 +71,21 @@ class _PlanetScreenState extends State<PlanetScreen> {
             detailed.add(jsonDecode(r.body)['result']['properties']);
           }
         }
-        setState(() { planets = detailed; isLoading = false; });
+        setState(() {
+          planets = detailed;
+          isLoading = false;
+        });
       } else {
-        setState(() { errorMessage = 'Erreur API'; isLoading = false; });
+        setState(() {
+          errorMessage = 'Erreur API';
+          isLoading = false;
+        });
       }
     } catch (e) {
-      setState(() { errorMessage = 'Connexion impossible'; isLoading = false; });
+      setState(() {
+        errorMessage = 'Connexion impossible';
+        isLoading = false;
+      });
     }
   }
 
@@ -78,63 +97,186 @@ class _PlanetScreenState extends State<PlanetScreen> {
         backgroundColor: Colors.transparent,
         title: const Text('PLANÈTES', style: TextStyle(letterSpacing: 4)),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: showGrid ? 'Mode liste' : 'Mode grille',
+            onPressed: () => setState(() => showGrid = !showGrid),
+            icon: Icon(showGrid ? Icons.view_list : Icons.grid_view),
+          ),
+          IconButton(
+            tooltip: 'Rafraîchir',
+            onPressed: fetchPlanets,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: isLoading
           ? _loadingWidget()
           : errorMessage != null
-              ? _errorWidget()
-              : GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    childAspectRatio: 0.72,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
+          ? _errorWidget()
+          : Column(
+              children: [
+                _searchBar(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: fetchPlanets,
+                    color: arcadeNeonCyan,
+                    child: showGrid ? _buildGrid() : _buildList(),
                   ),
-                  itemCount: planets.length,
-                  itemBuilder: (context, index) {
-                    return _PlanetCard(
-                      planet: planets[index],
-                      color: planetColors[index % planetColors.length],
-                      imageUrl: planetImages[index % planetImages.length],
-                    );
-                  },
                 ),
+              ],
+            ),
     );
   }
 
-  Widget _loadingWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(color: Color(0xFFFFE81F), strokeWidth: 3),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Exploration galactique...',
-              style: TextStyle(
-                color: const Color(0xFFFFE81F).withOpacity(0.8),
-                fontSize: 16,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
+  List<dynamic> get _filteredPlanets {
+    final query = searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return planets;
+    return planets.where((planet) {
+      final name = (planet['name'] ?? '').toString().toLowerCase();
+      final climate = (planet['climate'] ?? '').toString().toLowerCase();
+      return name.contains(query) || climate.contains(query);
+    }).toList();
+  }
+
+  Widget _searchBar() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+    child: TextField(
+      onChanged: (value) => setState(() => searchQuery = value),
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: 'Rechercher une planète (nom, climat)...',
+        hintStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: const Icon(Icons.search, color: arcadeNeonCyan),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.06),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.white24),
         ),
-      );
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: arcadeNeonPink),
+        ),
+      ),
+    ),
+  );
+
+  Widget _buildGrid() => _filteredPlanets.isEmpty
+      ? _emptyWidget()
+      : GridView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 0.72,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: _filteredPlanets.length,
+          itemBuilder: (context, index) {
+            return _PlanetCard(
+              planet: _filteredPlanets[index],
+              color: planetColors[index % planetColors.length],
+              imageUrl: planetImages[index % planetImages.length],
+            );
+          },
+        );
+
+  Widget _buildList() => _filteredPlanets.isEmpty
+      ? _emptyWidget()
+      : ListView.builder(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+          itemCount: _filteredPlanets.length,
+          itemBuilder: (context, index) {
+            final planet = _filteredPlanets[index];
+            final color = planetColors[index % planetColors.length];
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: color.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.public, color: color),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      planet['name'] ?? 'Inconnu',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    (planet['climate'] ?? '?').toString(),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+
+  Widget _emptyWidget() => ListView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    children: const [
+      SizedBox(height: 140),
+      Center(
+        child: Text(
+          'Aucune planète ne correspond à votre recherche.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      ),
+    ],
+  );
+
+  Widget _loadingWidget() => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(
+          width: 60,
+          height: 60,
+          child: CircularProgressIndicator(
+            color: arcadeNeonCyan,
+            strokeWidth: 3,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Scan des secteurs en cours...',
+          style: TextStyle(
+            color: arcadeNeonPink.withOpacity(0.9),
+            fontSize: 16,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _errorWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.warning_amber, color: Color(0xFFFFE81F), size: 60),
-            const SizedBox(height: 16),
-            Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.videogame_asset, color: arcadeNeonPink, size: 60),
+        const SizedBox(height: 16),
+        Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: fetchPlanets,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Réessayer'),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _PlanetCard extends StatelessWidget {
@@ -157,10 +299,7 @@ class _PlanetCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [
-            color.withOpacity(0.1),
-            const Color(0xFF020B18),
-          ],
+          colors: [color.withOpacity(0.1), arcadeBgDark],
         ),
         boxShadow: [
           BoxShadow(
@@ -187,7 +326,7 @@ class _PlanetCard extends StatelessWidget {
                     height: 120,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [color.withOpacity(0.4), const Color(0xFF020B18)],
+                        colors: [color.withOpacity(0.4), arcadeBgDark],
                       ),
                     ),
                     child: Center(
@@ -201,7 +340,7 @@ class _PlanetCard extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Colors.transparent, const Color(0xFF020B18)],
+                      colors: [Colors.transparent, arcadeBgDark],
                     ),
                   ),
                 ),
@@ -217,7 +356,10 @@ class _PlanetCard extends StatelessWidget {
                       color: color.withOpacity(0.3),
                       border: Border.all(color: color, width: 2),
                       boxShadow: [
-                        BoxShadow(color: color.withOpacity(0.6), blurRadius: 10),
+                        BoxShadow(
+                          color: color.withOpacity(0.6),
+                          blurRadius: 10,
+                        ),
                       ],
                     ),
                   ),

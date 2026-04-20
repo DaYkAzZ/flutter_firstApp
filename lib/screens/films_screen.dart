@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+const arcadeBgDark = Color(0xFF070311);
+const arcadeNeonCyan = Color(0xFF00F5FF);
+const arcadeNeonPink = Color(0xFFFF2FAE);
+
 class FilmsScreen extends StatefulWidget {
   const FilmsScreen({super.key});
 
@@ -13,6 +17,7 @@ class _FilmsScreenState extends State<FilmsScreen> {
   List<dynamic> films = [];
   bool isLoading = true;
   String? errorMessage;
+  String searchQuery = '';
 
   // Affiches libres de droits / fan art depuis Wikimedia ou images spatiales
   final List<String> posterUrls = [
@@ -35,11 +40,11 @@ class _FilmsScreenState extends State<FilmsScreen> {
   ];
 
   final List<Color> episodeColors = [
-    const Color(0xFFFFE81F),
+    arcadeNeonCyan,
     const Color(0xFF00BFFF),
-    const Color(0xFFFF4500),
+    arcadeNeonPink,
     const Color(0xFF7CFC00),
-    const Color(0xFFFF69B4),
+    const Color(0xFFA66BFF),
     const Color(0xFF9370DB),
   ];
 
@@ -50,22 +55,37 @@ class _FilmsScreenState extends State<FilmsScreen> {
   }
 
   Future<void> fetchFilms() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
     try {
-      final response = await http.get(Uri.parse('https://swapi.tech/api/films'));
+      final response = await http.get(
+        Uri.parse('https://swapi.tech/api/films'),
+      );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final sorted = List.from(data['result'])
-          ..sort((a, b) =>
-              a['properties']['episode_id'].compareTo(b['properties']['episode_id']));
+          ..sort(
+            (a, b) => a['properties']['episode_id'].compareTo(
+              b['properties']['episode_id'],
+            ),
+          );
         setState(() {
           films = sorted;
           isLoading = false;
         });
       } else {
-        setState(() { errorMessage = 'Erreur API'; isLoading = false; });
+        setState(() {
+          errorMessage = 'Erreur API';
+          isLoading = false;
+        });
       }
     } catch (e) {
-      setState(() { errorMessage = 'Connexion impossible'; isLoading = false; });
+      setState(() {
+        errorMessage = 'Connexion impossible';
+        isLoading = false;
+      });
     }
   }
 
@@ -81,71 +101,147 @@ class _FilmsScreenState extends State<FilmsScreen> {
             Image.network(
               'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Star_Wars_Logo.svg/200px-Star_Wars_Logo.svg.png',
               height: 30,
-              errorBuilder: (_, __, ___) => const Icon(Icons.star, color: Color(0xFFFFE81F)),
+              errorBuilder: (_, __, ___) =>
+                  const Icon(Icons.star, color: arcadeNeonPink),
             ),
             const SizedBox(width: 10),
             const Text('FILMS', style: TextStyle(letterSpacing: 4)),
           ],
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Rafraîchir',
+            onPressed: fetchFilms,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: isLoading
           ? _loadingWidget()
           : errorMessage != null
-              ? _errorWidget()
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-                  itemCount: films.length,
-                  itemBuilder: (context, index) {
-                    final film = films[index]['properties'];
-                    final color = episodeColors[index % episodeColors.length];
-                    final imgIndex = index % spaceImages.length;
-                    return _FilmCard(
-                      film: film,
-                      color: color,
-                      imageUrl: spaceImages[imgIndex],
-                      index: index,
-                    );
-                  },
+          ? _errorWidget()
+          : Column(
+              children: [
+                _searchBar(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: fetchFilms,
+                    color: arcadeNeonCyan,
+                    child: _filteredFilms.isEmpty
+                        ? _emptyWidget()
+                        : ListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+                            itemCount: _filteredFilms.length,
+                            itemBuilder: (context, index) {
+                              final film = _filteredFilms[index]['properties'];
+                              final color =
+                                  episodeColors[index % episodeColors.length];
+                              final imgIndex = index % spaceImages.length;
+                              return _FilmCard(
+                                film: film,
+                                color: color,
+                                imageUrl: spaceImages[imgIndex],
+                                index: index,
+                              );
+                            },
+                          ),
+                  ),
                 ),
+              ],
+            ),
     );
   }
 
-  Widget _loadingWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(
-                color: Color(0xFFFFE81F),
-                strokeWidth: 3,
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Que la Force soit avec toi...',
-              style: TextStyle(
-                color: const Color(0xFFFFE81F).withOpacity(0.8),
-                fontSize: 16,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
+  List<dynamic> get _filteredFilms {
+    final query = searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return films;
+    return films.where((film) {
+      final props = film['properties'] ?? {};
+      final title = (props['title'] ?? '').toString().toLowerCase();
+      final director = (props['director'] ?? '').toString().toLowerCase();
+      return title.contains(query) || director.contains(query);
+    }).toList();
+  }
+
+  Widget _searchBar() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+    child: TextField(
+      onChanged: (value) => setState(() => searchQuery = value),
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: 'Rechercher un film ou un réalisateur...',
+        hintStyle: const TextStyle(color: Colors.white54),
+        prefixIcon: const Icon(Icons.search, color: arcadeNeonCyan),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.06),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.white24),
         ),
-      );
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: arcadeNeonPink),
+        ),
+      ),
+    ),
+  );
+
+  Widget _emptyWidget() => ListView(
+    physics: const AlwaysScrollableScrollPhysics(),
+    children: const [
+      SizedBox(height: 140),
+      Center(
+        child: Text(
+          'Aucun film trouvé.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      ),
+    ],
+  );
+
+  Widget _loadingWidget() => Center(
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(
+          width: 60,
+          height: 60,
+          child: CircularProgressIndicator(
+            color: arcadeNeonCyan,
+            strokeWidth: 3,
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'Chargement du mode ARCADE...',
+          style: TextStyle(
+            color: arcadeNeonPink.withOpacity(0.9),
+            fontSize: 16,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _errorWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.warning_amber, color: Color(0xFFFFE81F), size: 60),
-            const SizedBox(height: 16),
-            Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.videogame_asset, color: arcadeNeonPink, size: 60),
+        const SizedBox(height: 16),
+        Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
+        const SizedBox(height: 12),
+        ElevatedButton.icon(
+          onPressed: fetchFilms,
+          icon: const Icon(Icons.refresh),
+          label: const Text('Réessayer'),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _FilmCard extends StatelessWidget {
@@ -171,10 +267,7 @@ class _FilmCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            color.withOpacity(0.08),
-            const Color(0xFF020B18).withOpacity(0.95),
-          ],
+          colors: [color.withOpacity(0.08), arcadeBgDark.withOpacity(0.95)],
         ),
         boxShadow: [
           BoxShadow(
@@ -201,10 +294,12 @@ class _FilmCard extends StatelessWidget {
                     height: 160,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [color.withOpacity(0.3), const Color(0xFF020B18)],
+                        colors: [color.withOpacity(0.3), arcadeBgDark],
                       ),
                     ),
-                    child: const Center(child: Icon(Icons.stars, color: Colors.white30, size: 60)),
+                    child: const Center(
+                      child: Icon(Icons.stars, color: Colors.white30, size: 60),
+                    ),
                   ),
                 ),
                 // Dégradé overlay
@@ -216,7 +311,7 @@ class _FilmCard extends StatelessWidget {
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        const Color(0xFF020B18).withOpacity(0.9),
+                        arcadeBgDark.withOpacity(0.9),
                       ],
                     ),
                   ),
@@ -226,7 +321,10 @@ class _FilmCard extends StatelessWidget {
                   top: 12,
                   left: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(20),
@@ -271,7 +369,11 @@ class _FilmCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    _Badge(Icons.calendar_today, film['release_date'] ?? '', color),
+                    _Badge(
+                      Icons.calendar_today,
+                      film['release_date'] ?? '',
+                      color,
+                    ),
                     const SizedBox(width: 8),
                     _Badge(Icons.movie, film['director'] ?? '', color),
                   ],
@@ -327,7 +429,10 @@ class _Badge extends StatelessWidget {
         children: [
           Icon(icon, size: 12, color: color),
           const SizedBox(width: 4),
-          Text(text, style: TextStyle(color: color.withOpacity(0.9), fontSize: 11)),
+          Text(
+            text,
+            style: TextStyle(color: color.withOpacity(0.9), fontSize: 11),
+          ),
         ],
       ),
     );
