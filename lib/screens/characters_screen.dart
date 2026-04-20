@@ -49,12 +49,21 @@ class _CharactersScreenState extends State<CharactersScreen> {
             detailed.add(jsonDecode(r.body)['result']['properties']);
           }
         }
-        setState(() { characters = detailed; isLoading = false; });
+        setState(() {
+          characters = detailed;
+          isLoading = false;
+        });
       } else {
-        setState(() { errorMessage = 'Erreur API'; isLoading = false; });
+        setState(() {
+          errorMessage = 'Erreur API';
+          isLoading = false;
+        });
       }
     } catch (e) {
-      setState(() { errorMessage = 'Connexion impossible'; isLoading = false; });
+      setState(() {
+        errorMessage = 'Connexion impossible';
+        isLoading = false;
+      });
     }
   }
 
@@ -82,57 +91,60 @@ class _CharactersScreenState extends State<CharactersScreen> {
       body: isLoading
           ? _loadingWidget()
           : errorMessage != null
-              ? _errorWidget()
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
-                  itemCount: characters.length,
-                  itemBuilder: (context, index) {
-                    final character = characters[index];
-                    final color = _sideColor(character['gender']);
-                    return _CharacterCard(
-                      character: character,
-                      color: color,
-                      sideLabel: _sideLabel(character['gender']),
-                      imageUrl: characterImages[index % characterImages.length],
-                      index: index,
-                    );
-                  },
-                ),
+          ? _errorWidget()
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 90),
+              itemCount: characters.length,
+              itemBuilder: (context, index) {
+                final character = characters[index];
+                final color = _sideColor(character['gender']);
+                return _CharacterCard(
+                  character: character,
+                  color: color,
+                  sideLabel: _sideLabel(character['gender']),
+                  imageUrl: characterImages[index % characterImages.length],
+                  index: index,
+                );
+              },
+            ),
     );
   }
 
   Widget _loadingWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const SizedBox(
-              width: 60,
-              height: 60,
-              child: CircularProgressIndicator(color: Color(0xFFFFE81F), strokeWidth: 3),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Recrutement en cours...',
-              style: TextStyle(
-                color: const Color(0xFFFFE81F).withOpacity(0.8),
-                fontSize: 16,
-                letterSpacing: 2,
-              ),
-            ),
-          ],
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const SizedBox(
+          width: 60,
+          height: 60,
+          child: CircularProgressIndicator(
+            color: Color(0xFFFFE81F),
+            strokeWidth: 3,
+          ),
         ),
-      );
+        const SizedBox(height: 20),
+        Text(
+          'Recrutement en cours...',
+          style: TextStyle(
+            color: const Color(0xFFFFE81F).withOpacity(0.8),
+            fontSize: 16,
+            letterSpacing: 2,
+          ),
+        ),
+      ],
+    ),
+  );
 
   Widget _errorWidget() => Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.warning_amber, color: Color(0xFFFFE81F), size: 60),
-            const SizedBox(height: 16),
-            Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
-          ],
-        ),
-      );
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.warning_amber, color: Color(0xFFFFE81F), size: 60),
+        const SizedBox(height: 16),
+        Text(errorMessage!, style: const TextStyle(color: Colors.white70)),
+      ],
+    ),
+  );
 }
 
 class _CharacterCard extends StatelessWidget {
@@ -160,10 +172,7 @@ class _CharacterCard extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
-          colors: [
-            color.withOpacity(0.08),
-            const Color(0xFF020B18),
-          ],
+          colors: [color.withOpacity(0.08), const Color(0xFF020B18)],
         ),
         boxShadow: [
           BoxShadow(
@@ -177,7 +186,9 @@ class _CharacterCard extends StatelessWidget {
         children: [
           // Avatar photo
           ClipRRect(
-            borderRadius: const BorderRadius.horizontal(left: Radius.circular(14)),
+            borderRadius: const BorderRadius.horizontal(
+              left: Radius.circular(14),
+            ),
             child: Stack(
               children: [
                 Image.network(
@@ -192,7 +203,10 @@ class _CharacterCard extends StatelessWidget {
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
-                        colors: [color.withOpacity(0.3), const Color(0xFF020B18)],
+                        colors: [
+                          color.withOpacity(0.3),
+                          const Color(0xFF020B18),
+                        ],
                       ),
                     ),
                     child: Center(
@@ -257,7 +271,10 @@ class _CharacterCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Badge côté
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
