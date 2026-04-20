@@ -5,6 +5,7 @@ Application Flutter realisee dans le cadre d'un TP pour explorer l'univers Star 
 ## Objectif du TP
 
 L'objectif est de construire une application mobile avec :
+
 - une navigation entre plusieurs ecrans ;
 - la consommation d'une API REST ;
 - l'affichage de listes et grilles dynamiques ;

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math' as math;
 import 'screens/films_screen.dart';
 import 'screens/planet_screen.dart';
 import 'screens/characters_screen.dart';
@@ -57,14 +58,49 @@ class MainPage extends StatefulWidget {
   State<MainPage> createState() => _MainPageState();
 }
 
-class _MainPageState extends State<MainPage> {
+class _MainPageState extends State<MainPage> with TickerProviderStateMixin {
   int _selectedIndex = 0;
+  late final AnimationController _spaceFxController;
+  late final AnimationController _jumpController;
+  bool _showHyperspace = false;
 
   final List<Widget> _screens = const [
     FilmsScreen(),
     PlanetScreen(),
     CharactersScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _spaceFxController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    )..repeat();
+    _jumpController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 650),
+    );
+  }
+
+  @override
+  void dispose() {
+    _spaceFxController.dispose();
+    _jumpController.dispose();
+    super.dispose();
+  }
+
+  void _onTabTap(int index) {
+    if (_selectedIndex == index) return;
+    setState(() {
+      _selectedIndex = index;
+      _showHyperspace = true;
+    });
+    _jumpController.forward(from: 0).whenComplete(() {
+      if (!mounted) return;
+      setState(() => _showHyperspace = false);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,8 +118,18 @@ class _MainPageState extends State<MainPage> {
             ),
           ),
           // Étoiles
-          const StarfieldBackground(),
-          const ScanlineOverlay(),
+          AnimatedBuilder(
+            animation: _spaceFxController,
+            builder: (context, child) {
+              return StarfieldBackground(t: _spaceFxController.value);
+            },
+          ),
+          AnimatedBuilder(
+            animation: _spaceFxController,
+            builder: (context, child) {
+              return ScanlineOverlay(t: _spaceFxController.value);
+            },
+          ),
           IgnorePointer(
             child: Container(
               decoration: BoxDecoration(
@@ -99,9 +145,45 @@ class _MainPageState extends State<MainPage> {
               ),
             ),
           ),
+          if (_showHyperspace)
+            AnimatedBuilder(
+              animation: _jumpController,
+              builder: (context, child) {
+                return HyperspaceFlash(progress: _jumpController.value);
+              },
+            ),
           // Contenu
-          _screens[_selectedIndex],
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 450),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final fade = CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              );
+              final slide = Tween<Offset>(
+                begin: const Offset(0.06, 0),
+                end: Offset.zero,
+              ).animate(fade);
+              return FadeTransition(
+                opacity: fade,
+                child: SlideTransition(position: slide, child: child),
+              );
+            },
+            child: KeyedSubtree(
+              key: ValueKey<int>(_selectedIndex),
+              child: _screens[_selectedIndex],
+            ),
+          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showOpeningCrawl(context),
+        backgroundColor: arcadeNeonPink,
+        foregroundColor: Colors.black,
+        icon: const Icon(Icons.auto_awesome),
+        label: const Text('OPENING CRAWL'),
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -128,7 +210,7 @@ class _MainPageState extends State<MainPage> {
             letterSpacing: 1.4,
           ),
           elevation: 0,
-          onTap: (index) => setState(() => _selectedIndex = index),
+          onTap: _onTabTap,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.movie_filter_outlined),
@@ -150,19 +232,32 @@ class _MainPageState extends State<MainPage> {
       ),
     );
   }
+
+  void _showOpeningCrawl(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => const _OpeningCrawlSheet(),
+    );
+  }
 }
 
 // Widget d'étoiles en fond
 class StarfieldBackground extends StatelessWidget {
-  const StarfieldBackground({super.key});
+  final double t;
+  const StarfieldBackground({super.key, required this.t});
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(painter: StarPainter(), size: Size.infinite);
+    return CustomPaint(painter: StarPainter(t), size: Size.infinite);
   }
 }
 
 class StarPainter extends CustomPainter {
+  final double t;
+  StarPainter(this.t);
+
   final List<Offset> stars = const [
     Offset(0.05, 0.02),
     Offset(0.15, 0.08),
@@ -241,11 +336,13 @@ class StarPainter extends CustomPainter {
           : (i % 5 == 1)
           ? 0.6
           : 0.4;
+      final twinkle = 0.65 + 0.35 * math.sin((t * 2 * math.pi) + i * 0.55);
+      final animatedOpacity = (opacity * twinkle).clamp(0.2, 1.0);
       final flickerColor = (i % 4 == 0)
-          ? arcadeNeonCyan.withOpacity(opacity)
+          ? arcadeNeonCyan.withOpacity(animatedOpacity)
           : (i % 4 == 1)
-          ? arcadeNeonPink.withOpacity(opacity * 0.85)
-          : Colors.white.withOpacity(opacity);
+          ? arcadeNeonPink.withOpacity(animatedOpacity * 0.85)
+          : Colors.white.withOpacity(animatedOpacity);
       canvas.drawCircle(
         Offset(star.dx * size.width, star.dy * size.height),
         radius,
@@ -255,29 +352,180 @@ class StarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant StarPainter oldDelegate) => oldDelegate.t != t;
 }
 
 class ScanlineOverlay extends StatelessWidget {
-  const ScanlineOverlay({super.key});
+  final double t;
+  const ScanlineOverlay({super.key, required this.t});
 
   @override
   Widget build(BuildContext context) {
     return IgnorePointer(
-      child: CustomPaint(painter: ScanlinePainter(), size: Size.infinite),
+      child: CustomPaint(painter: ScanlinePainter(t), size: Size.infinite),
     );
   }
 }
 
 class ScanlinePainter extends CustomPainter {
+  final double t;
+  ScanlinePainter(this.t);
+
   @override
   void paint(Canvas canvas, Size size) {
     final linePaint = Paint()..color = Colors.white.withOpacity(0.03);
-    for (double y = 0; y < size.height; y += 4) {
+    final offset = (t * 6) % 4;
+    for (double y = -4 + offset; y < size.height; y += 4) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant ScanlinePainter oldDelegate) =>
+      oldDelegate.t != t;
+}
+
+class HyperspaceFlash extends StatelessWidget {
+  final double progress;
+  const HyperspaceFlash({super.key, required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    final opacity = (1 - (progress - 0.5).abs() * 2).clamp(0.0, 1.0);
+    return IgnorePointer(
+      child: Opacity(
+        opacity: opacity * 0.45,
+        child: CustomPaint(
+          painter: _HyperspacePainter(progress),
+          size: Size.infinite,
+        ),
+      ),
+    );
+  }
+}
+
+class _HyperspacePainter extends CustomPainter {
+  final double progress;
+  _HyperspacePainter(this.progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          arcadeNeonCyan.withOpacity(0.8),
+          arcadeNeonPink.withOpacity(0.55),
+          Colors.white.withOpacity(0.9),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+
+    final lineCount = 35;
+    for (int i = 0; i < lineCount; i++) {
+      final angle = (i / lineCount) * math.pi * 2;
+      final dir = Offset(math.cos(angle), math.sin(angle));
+      final start = center + dir * (25 + 30 * progress);
+      final end = center + dir * (size.longestSide * (0.5 + progress));
+      canvas.drawLine(start, end, paint..strokeWidth = 1 + (2.2 * progress));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HyperspacePainter oldDelegate) =>
+      oldDelegate.progress != progress;
+}
+
+class _OpeningCrawlSheet extends StatefulWidget {
+  const _OpeningCrawlSheet();
+
+  @override
+  State<_OpeningCrawlSheet> createState() => _OpeningCrawlSheetState();
+}
+
+class _OpeningCrawlSheetState extends State<_OpeningCrawlSheet>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _crawlController;
+
+  @override
+  void initState() {
+    super.initState();
+    _crawlController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 18),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _crawlController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: BoxDecoration(
+        color: arcadeBgDark.withOpacity(0.95),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+        border: Border.all(color: arcadeNeonCyan.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(color: arcadeNeonPink.withOpacity(0.3), blurRadius: 18),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _crawlController,
+                builder: (context, child) {
+                  final y = 1.2 - (_crawlController.value * 1.9);
+                  return Transform(
+                    alignment: Alignment.bottomCenter,
+                    transform: Matrix4.identity()
+                      ..setEntry(3, 2, 0.0016)
+                      ..rotateX(-0.72),
+                    child: FractionalTranslation(
+                      translation: Offset(0, y),
+                      child: child,
+                    ),
+                  );
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: Text(
+                    'EPISODE TP\n'
+                    'LA MONTEE EN PUISSANCE\n\n'
+                    'Un jeune Padawan du code transforme son application '
+                    'en une borne arcade intergalactique.\n\n'
+                    'Animations, neon et hyperespace ont ete ajoutes '
+                    'pour impressionner le Conseil Jedi.\n\n'
+                    'Mais ce n est que le debut...\n'
+                    'D autres fonctionnalites epiques approchent.\n',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFFFD54F),
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.5,
+                      letterSpacing: 1.4,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close, color: arcadeNeonCyan),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
